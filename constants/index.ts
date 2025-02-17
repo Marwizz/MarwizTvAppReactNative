@@ -19,7 +19,7 @@ export const MEDIA_BASE_URL = "https://marwiz.blob.core.windows.net/videos/";
 export const SQS_CLIENT = new SQSClient({
   region: "eu-north-1",
   credentials: {
-    accessKeyId: process.env.EXPO_PUBLIC_API_URL! as string,
+    accessKeyId: process.env.EXPO_PUBLIC_ACCESS_KEY_ID! as string,
     secretAccessKey: process.env.EXPO_PUBLIC_SECRET_ACCESS_KEY as string,
   },
 });

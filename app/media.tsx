@@ -15,7 +15,6 @@ import {
 } from "@aws-sdk/client-sqs";
 import { useBoolean, useCounter } from "ahooks";
 import axios from "axios";
-import { useEvent } from "expo";
 import { useLocalSearchParams } from "expo-router";
 import { useVideoPlayer, VideoView } from "expo-video";
 import _ from "lodash";
@@ -29,6 +28,8 @@ const Media = () => {
 
   const param = useLocalSearchParams();
   const [counter, { inc }] = useCounter(0);
+  const [nextTick, { set: setNextTick }] = useCounter(0);
+
   const [isLoading, { set: setIsLoading }] = useBoolean(true);
   const [isShowAD, { set: setIsShowAD }] = useBoolean(true);
 
@@ -40,10 +41,6 @@ const Media = () => {
   const player = useVideoPlayer(MEDIA_BASE_URL + videoUri, (player) => {
     player.loop = false;
     player.play();
-  });
-
-  const { isPlaying } = useEvent(player, "playingChange", {
-    isPlaying: player.playing,
   });
 
   useEffect(() => {
@@ -100,6 +97,8 @@ const Media = () => {
             } else if (isValidVideo(mediaUri)) {
               setVideoUri(mediaUri);
             }
+
+            setNextTick(_.toNumber(response.data[0].duration));
           }
         }
       } catch (error) {}
@@ -107,6 +106,12 @@ const Media = () => {
       counter === 0 && setIsLoading(false);
     })();
   }, [deviceID, counter]);
+
+  useEffect(() => {
+    _.delay(() => {
+      handleMediaLoad(true);
+    }, nextTick * 1000);
+  }, [nextTick]);
 
   useEffect(() => {
     const sqlFn = async () => {
@@ -123,6 +128,8 @@ const Media = () => {
         );
 
         if (_.isArray(Messages)) {
+          inc();
+
           await asyncMap(Messages, async (item) => {
             await SQS_CLIENT.send(
               new DeleteMessageCommand({
@@ -131,8 +138,6 @@ const Media = () => {
               })
             );
           });
-
-          inc();
         }
       } catch (err) {}
     };
@@ -141,18 +146,14 @@ const Media = () => {
     return () => clearInterval(interval);
   }, []);
 
-  useEffect(() => {
-    if (videoUri && isPlaying === false) {
-      handleMediaLoad();
-    }
-  }, [isPlaying, videoUri]);
-
   const resetMedia = () => {
     setImgUri("");
     setVideoUri("");
   };
 
-  const handleMediaLoad = () => {
+  const handleMediaLoad: (shouldSkip?: boolean) => void = (
+    shouldSkip = false
+  ) => {
     let delayTime = 0;
     let delayIndex = 0;
 
@@ -163,27 +164,34 @@ const Media = () => {
       }
     });
 
-    _.delay(() => {
-      resetMedia();
+    _.delay(
+      () => {
+        resetMedia();
 
-      if (delayIndex < rawData.length - 1) {
-        const mediaUri = rawData[delayIndex + 1]?.mediaUrl[0];
+        if (delayIndex < rawData.length - 1) {
+          const mediaUri = rawData[delayIndex + 1]?.mediaUrl[0];
 
-        if (isValidImage(mediaUri)) {
-          setImgUri(mediaUri);
-        } else if (isValidVideo(mediaUri)) {
-          setVideoUri(mediaUri);
+          if (isValidImage(mediaUri)) {
+            setImgUri(mediaUri);
+          } else if (isValidVideo(mediaUri)) {
+            setVideoUri(mediaUri);
+          }
+
+          setNextTick(_.toNumber(rawData[delayIndex + 1].duration));
+        } else {
+          const mediaUri = rawData[0]?.mediaUrl[0];
+
+          if (isValidImage(mediaUri)) {
+            setImgUri(mediaUri);
+          } else if (isValidVideo(mediaUri)) {
+            setVideoUri(mediaUri);
+          }
+
+          setNextTick(_.toNumber(rawData[0]?.duration));
         }
-      } else {
-        const mediaUri = rawData[0]?.mediaUrl[0];
-
-        if (isValidImage(mediaUri)) {
-          setImgUri(mediaUri);
-        } else if (isValidVideo(mediaUri)) {
-          setVideoUri(mediaUri);
-        }
-      }
-    }, delayTime);
+      },
+      shouldSkip === true ? 0 : _.toNumber(delayTime)
+    );
   };
 
   if (isLoading === true) {
@@ -213,7 +221,6 @@ const Media = () => {
             objectFit="contain"
             height={screenHeight}
             width={"100%"}
-            onLoad={handleMediaLoad}
           />
         )}
 
@@ -226,7 +233,6 @@ const Media = () => {
             player={player}
             allowsFullscreen
             allowsPictureInPicture
-            nativeControls={false}
           />
         )}
       </View>
