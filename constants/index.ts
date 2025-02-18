@@ -24,7 +24,8 @@ export const SQS_CLIENT = new SQSClient({
   },
 });
 
-export const { height: screenHeight } = Dimensions.get("screen");
+export const { height: screenHeight, width: screenWidth } =
+  Dimensions.get("screen");
 
 export const imgFormate = [
   ".jpg",

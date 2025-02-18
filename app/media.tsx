@@ -4,6 +4,7 @@ import {
   MEDIA_BASE_URL,
   MEDIA_URL,
   screenHeight,
+  screenWidth,
   SQS_CLIENT,
 } from "@/constants";
 import { useBackHandler } from "@/hooks/useBackHandler";
@@ -20,7 +21,7 @@ import { useVideoPlayer, VideoView } from "expo-video";
 import _ from "lodash";
 import { asyncMap } from "modern-async";
 import moment from "moment";
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { Image, Spinner, Text, View } from "tamagui";
 
 const Media = () => {
@@ -28,7 +29,6 @@ const Media = () => {
 
   const param = useLocalSearchParams();
   const [counter, { inc }] = useCounter(0);
-  const [nextTick, { set: setNextTick }] = useCounter(0);
 
   const [isLoading, { set: setIsLoading }] = useBoolean(true);
   const [isShowAD, { set: setIsShowAD }] = useBoolean(true);
@@ -37,6 +37,8 @@ const Media = () => {
   const [imgUri, setImgUri] = useState("");
   const [videoUri, setVideoUri] = useState("");
   const [rawData, setRawData] = useState<IGetDeviceInfo[]>([]);
+
+  const videoRef = useRef<VideoView>(null);
 
   const player = useVideoPlayer(MEDIA_BASE_URL + videoUri, (player) => {
     player.loop = false;
@@ -68,6 +70,12 @@ const Media = () => {
   }, [rawData]);
 
   useEffect(() => {
+    if (player.status === "readyToPlay") {
+      videoRef.current?.enterFullscreen();
+    }
+  }, [player]);
+
+  useEffect(() => {
     if ("deviceID" in param && typeof param.deviceID === "string") {
       if (param.deviceID !== deviceID) {
         setDeviceID(param.deviceID);
@@ -97,8 +105,8 @@ const Media = () => {
             } else if (isValidVideo(mediaUri)) {
               setVideoUri(mediaUri);
             }
-
-            setNextTick(_.toNumber(response.data[0].duration));
+          } else {
+            setIsShowAD(false);
           }
         }
       } catch (error) {}
@@ -106,12 +114,6 @@ const Media = () => {
       counter === 0 && setIsLoading(false);
     })();
   }, [deviceID, counter]);
-
-  useEffect(() => {
-    _.delay(() => {
-      handleMediaLoad(true);
-    }, nextTick * 1000);
-  }, [nextTick]);
 
   useEffect(() => {
     const sqlFn = async () => {
@@ -146,52 +148,50 @@ const Media = () => {
     return () => clearInterval(interval);
   }, []);
 
+  useEffect(() => {
+    (async () => {
+      if (!_.isArray(rawData)) return;
+      if (rawData.length === 0) return;
+
+      let delayTime = 0;
+      let delayIndex = -1;
+
+      for (let index = 0; index < rawData.length; index++) {
+        const item = rawData[index];
+        if (item.mediaUrl[0] === imgUri || item.mediaUrl[0] === videoUri) {
+          delayTime = _.toNumber(item.duration) * 1000;
+          delayIndex = index;
+        }
+      }
+
+      if (delayIndex === -1) return;
+
+      while (true) {
+        await new Promise((r) => setTimeout(r, delayTime));
+
+        resetMedia();
+
+        let mediaUri;
+        if (delayIndex < rawData.length - 1) {
+          mediaUri = rawData[delayIndex + 1]?.mediaUrl[0];
+        } else {
+          mediaUri = rawData[0]?.mediaUrl[0];
+        }
+
+        if (isValidImage(mediaUri)) {
+          setImgUri(mediaUri);
+        } else if (isValidVideo(mediaUri)) {
+          setVideoUri(mediaUri);
+        }
+
+        delayIndex = _.toInteger((delayIndex + 1) % rawData.length);
+      }
+    })();
+  }, [rawData]);
+
   const resetMedia = () => {
     setImgUri("");
     setVideoUri("");
-  };
-
-  const handleMediaLoad: (shouldSkip?: boolean) => void = (
-    shouldSkip = false
-  ) => {
-    let delayTime = 0;
-    let delayIndex = 0;
-
-    rawData.forEach((item: any, index) => {
-      if (item.mediaUrl[0] === imgUri) {
-        delayTime = item.duration * 1000;
-        delayIndex = index;
-      }
-    });
-
-    _.delay(
-      () => {
-        resetMedia();
-
-        if (delayIndex < rawData.length - 1) {
-          const mediaUri = rawData[delayIndex + 1]?.mediaUrl[0];
-
-          if (isValidImage(mediaUri)) {
-            setImgUri(mediaUri);
-          } else if (isValidVideo(mediaUri)) {
-            setVideoUri(mediaUri);
-          }
-
-          setNextTick(_.toNumber(rawData[delayIndex + 1].duration));
-        } else {
-          const mediaUri = rawData[0]?.mediaUrl[0];
-
-          if (isValidImage(mediaUri)) {
-            setImgUri(mediaUri);
-          } else if (isValidVideo(mediaUri)) {
-            setVideoUri(mediaUri);
-          }
-
-          setNextTick(_.toNumber(rawData[0]?.duration));
-        }
-      },
-      shouldSkip === true ? 0 : _.toNumber(delayTime)
-    );
   };
 
   if (isLoading === true) {
@@ -227,12 +227,13 @@ const Media = () => {
         {videoUri && (
           <VideoView
             style={{
-              width: 350,
-              height: 275,
+              width: screenWidth,
+              height: screenHeight,
             }}
             player={player}
-            allowsFullscreen
+            allowsFullscreen={true}
             allowsPictureInPicture
+            ref={videoRef}
           />
         )}
       </View>
