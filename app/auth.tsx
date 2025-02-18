@@ -1,4 +1,9 @@
-import { CREATE_WIZZ_ID, GET_DEVICE_ID } from "@/constants";
+import {
+  CREATE_WIZZ_ID,
+  GET_DEVICE_ID,
+  screenHeight,
+  screenWidth,
+} from "@/constants";
 import { MaterialIcons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import axios from "axios";
@@ -16,7 +21,29 @@ const Auth = () => {
   const [wizzString, setWizzString] = useState(null);
   const [deviceID, setDeviceID] = useState(null);
   const [isWizzStringValid, setIsWizzStringValid] = useState(false);
-  const deviceName = Device.deviceName;
+
+  useEffect(() => {
+    (async () => {
+      const isPortrait = screenHeight >= screenWidth;
+
+      if (isPortrait === false) {
+        setRotation(90);
+
+        await ScreenOrientation.lockAsync(
+          ScreenOrientation.OrientationLock.LANDSCAPE
+        );
+      } else {
+        setRotation(0);
+
+        await ScreenOrientation.lockAsync(
+          ScreenOrientation.OrientationLock.PORTRAIT
+        );
+      }
+    })();
+  }, [screenHeight, screenWidth]);
+
+  const deviceName =
+    Device.deviceName || Device.productName || Device.modelName;
 
   const toggleOrientation = async () => {
     const newRotation = (rotation + 90) % 360;
@@ -44,7 +71,8 @@ const Auth = () => {
   };
 
   const checkWizzStringStatus = async (wizzString: any) => {
-    const res = await axios.get(`${GET_DEVICE_ID}${wizzString}`);
+    const res = await axios.get(`${GET_DEVICE_ID}/${wizzString}`);
+
     if (res.data && res.data.deviceId) {
       setDeviceID(res.data.deviceId);
       await AsyncStorage.setItem("deviceId", res.data.deviceId);
