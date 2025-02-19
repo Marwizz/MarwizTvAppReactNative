@@ -43,8 +43,6 @@ const Media = () => {
   const [deviceID, setDeviceID] = useState("");
   const [imgUri, setImgUri] = useState("");
   const [videoUri, setVideoUri] = useState("");
-  const [_imgUri, _setImgUri] = useState("");
-  const [_videoUri, _setVideoUri] = useState("");
   const [rawData, setRawData] = useState<IGetDeviceInfo[]>([]);
 
   const player = useVideoPlayer(MEDIA_BASE_URL + videoUri, (player) => {
@@ -124,20 +122,12 @@ const Media = () => {
           if (!_.isEmpty(response.data) && response.data.length !== 0) {
             const mediaUri = response.data[0]?.mediaUrl[0];
 
-            // await asyncMap(response.data, async (item) => {
-            //   await mediaCaching(item.mediaUrl[0]);
-            // });
-
             resetMedia();
-
-            // const cachedUri = await mediaCaching(mediaUri);
 
             if (isValidImage(mediaUri)) {
               setImgUri(mediaUri);
-              // _setImgUri(mediaUri);
             } else if (isValidVideo(mediaUri)) {
               setVideoUri(mediaUri);
-              // _setVideoUri(mediaUri);
             }
           } else {
             setIsShowAD(false);
@@ -212,14 +202,10 @@ const Media = () => {
           mediaUri = rawData[0]?.mediaUrl[0];
         }
 
-        // const cachedUri = await mediaCaching(mediaUri);
-
         if (isValidImage(mediaUri)) {
           setImgUri(mediaUri);
-          // _setImgUri(mediaUri);
         } else if (isValidVideo(mediaUri)) {
           setVideoUri(mediaUri);
-          // _setVideoUri(mediaUri);
         }
 
         delayIndex = _.toInteger((delayIndex + 1) % rawData.length);
@@ -230,8 +216,6 @@ const Media = () => {
   const resetMedia = () => {
     setImgUri("");
     setVideoUri("");
-    _setImgUri("");
-    _setVideoUri("");
   };
 
   if (isLoading === true) {
