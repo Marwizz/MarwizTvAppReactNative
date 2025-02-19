@@ -1,11 +1,13 @@
 import "react-native-get-random-values";
 
 import {
+  BASE_WEBSOCKET_URI,
   MEDIA_BASE_URL,
   MEDIA_URL,
   screenHeight,
   screenWidth,
   SQS_CLIENT,
+  THANK_YOU_URI,
 } from "@/constants";
 import { useBackHandler } from "@/hooks/useBackHandler";
 import { IGetDeviceInfo } from "@/types";
@@ -22,28 +24,52 @@ import _ from "lodash";
 import { asyncMap } from "modern-async";
 import moment from "moment";
 import React, { useEffect, useRef, useState } from "react";
-import { Image, Spinner, Text, View } from "tamagui";
+import useWebSocket, { ReadyState } from "react-use-websocket";
+import { Dialog, Image, Spinner, Text, View } from "tamagui";
 
 const Media = () => {
   useBackHandler();
 
-  const param = useLocalSearchParams();
-  const [counter, { inc }] = useCounter(0);
+  const { lastMessage, readyState } = useWebSocket(BASE_WEBSOCKET_URI);
 
+  const param = useLocalSearchParams();
+  const videoRef = useRef<VideoView>(null);
+
+  const [counter, { inc }] = useCounter(0);
   const [isLoading, { set: setIsLoading }] = useBoolean(true);
   const [isShowAD, { set: setIsShowAD }] = useBoolean(true);
+  const [isPopupModal, { set: setIsPopupModal }] = useBoolean(false);
 
   const [deviceID, setDeviceID] = useState("");
   const [imgUri, setImgUri] = useState("");
   const [videoUri, setVideoUri] = useState("");
+  const [_imgUri, _setImgUri] = useState("");
+  const [_videoUri, _setVideoUri] = useState("");
   const [rawData, setRawData] = useState<IGetDeviceInfo[]>([]);
-
-  const videoRef = useRef<VideoView>(null);
 
   const player = useVideoPlayer(MEDIA_BASE_URL + videoUri, (player) => {
     player.loop = false;
     player.play();
   });
+
+  useEffect(() => {
+    if (readyState === ReadyState.OPEN) {
+      const isMotionDetected =
+        JSON.parse(lastMessage?.data || "{}")?.motion === 1;
+
+      if (isMotionDetected) {
+        setIsPopupModal(true);
+      }
+    }
+  }, [readyState, lastMessage]);
+
+  useEffect(() => {
+    if (isPopupModal === true) {
+      _.delay(() => {
+        setIsPopupModal(false);
+      }, 5 * 1000);
+    }
+  }, [isPopupModal]);
 
   useEffect(() => {
     const checkTime = () => {
@@ -98,12 +124,20 @@ const Media = () => {
           if (!_.isEmpty(response.data) && response.data.length !== 0) {
             const mediaUri = response.data[0]?.mediaUrl[0];
 
+            // await asyncMap(response.data, async (item) => {
+            //   await mediaCaching(item.mediaUrl[0]);
+            // });
+
             resetMedia();
+
+            // const cachedUri = await mediaCaching(mediaUri);
 
             if (isValidImage(mediaUri)) {
               setImgUri(mediaUri);
+              // _setImgUri(mediaUri);
             } else if (isValidVideo(mediaUri)) {
               setVideoUri(mediaUri);
+              // _setVideoUri(mediaUri);
             }
           } else {
             setIsShowAD(false);
@@ -178,10 +212,14 @@ const Media = () => {
           mediaUri = rawData[0]?.mediaUrl[0];
         }
 
+        // const cachedUri = await mediaCaching(mediaUri);
+
         if (isValidImage(mediaUri)) {
           setImgUri(mediaUri);
+          // _setImgUri(mediaUri);
         } else if (isValidVideo(mediaUri)) {
           setVideoUri(mediaUri);
+          // _setVideoUri(mediaUri);
         }
 
         delayIndex = _.toInteger((delayIndex + 1) % rawData.length);
@@ -192,6 +230,8 @@ const Media = () => {
   const resetMedia = () => {
     setImgUri("");
     setVideoUri("");
+    _setImgUri("");
+    _setVideoUri("");
   };
 
   if (isLoading === true) {
@@ -209,43 +249,141 @@ const Media = () => {
 
   if (isShowAD === true) {
     return (
+      <>
+        <View
+          flex={1}
+          bg={"black"}
+          justifyContent={"center"}
+          alignItems={"center"}
+        >
+          {imgUri && (
+            <Image
+              source={{ uri: MEDIA_BASE_URL + imgUri }}
+              objectFit="contain"
+              height={screenHeight}
+              width="100%"
+            />
+          )}
+
+          {videoUri && (
+            <VideoView
+              style={{
+                width: screenWidth,
+                height: screenHeight,
+              }}
+              player={player}
+              allowsFullscreen={true}
+              allowsPictureInPicture
+              // nativeControls={false}
+              ref={videoRef}
+            />
+          )}
+        </View>
+
+        <Dialog modal open={isPopupModal}>
+          <Dialog.Portal backgroundColor="$colorTransparent">
+            <Dialog.Overlay
+              key="overlay"
+              animation="slow"
+              enterStyle={{ opacity: 0 }}
+              exitStyle={{ opacity: 0 }}
+              padding={0}
+              margin={0}
+              borderWidth={0}
+              backgroundColor="$colorTransparent"
+            />
+
+            <Dialog.Content
+              bordered
+              elevate
+              key="content"
+              animateOnly={["transform", "opacity"]}
+              animation={[
+                "quicker",
+                {
+                  opacity: {
+                    overshootClamping: true,
+                  },
+                },
+              ]}
+              enterStyle={{ x: 0, y: -20, opacity: 0, scale: 0.9 }}
+              exitStyle={{ x: 0, y: 10, opacity: 0, scale: 0.95 }}
+              gap="$4"
+              padding={0}
+              margin={0}
+              borderWidth={0}
+              backgroundColor="$colorTransparent"
+            >
+              <Image
+                src={THANK_YOU_URI}
+                height={screenHeight / 1.8}
+                width={screenWidth / 1.2}
+                objectFit="contain"
+              />
+            </Dialog.Content>
+          </Dialog.Portal>
+        </Dialog>
+      </>
+    );
+  }
+
+  return (
+    <>
       <View
         flex={1}
         bg={"black"}
         justifyContent={"center"}
         alignItems={"center"}
       >
-        {imgUri && (
-          <Image
-            src={MEDIA_BASE_URL + imgUri}
-            objectFit="contain"
-            height={screenHeight}
-            width={"100%"}
-          />
-        )}
-
-        {videoUri && (
-          <VideoView
-            style={{
-              width: screenWidth,
-              height: screenHeight,
-            }}
-            player={player}
-            allowsFullscreen={true}
-            allowsPictureInPicture
-            ref={videoRef}
-          />
-        )}
+        <Text color={"white"} fontSize={"$9"}>
+          No Eligible Media to Play
+        </Text>
       </View>
-    );
-  }
 
-  return (
-    <View flex={1} bg={"black"} justifyContent={"center"} alignItems={"center"}>
-      <Text color={"white"} fontSize={"$9"}>
-        No Eligible Media to Play
-      </Text>
-    </View>
+      <Dialog modal open={isPopupModal}>
+        <Dialog.Portal backgroundColor="$colorTransparent">
+          <Dialog.Overlay
+            key="overlay"
+            animation="slow"
+            enterStyle={{ opacity: 0 }}
+            exitStyle={{ opacity: 0 }}
+            padding={0}
+            margin={0}
+            borderWidth={0}
+            backgroundColor="$colorTransparent"
+          />
+
+          <Dialog.Content
+            bordered
+            elevate
+            key="content"
+            animateOnly={["transform", "opacity"]}
+            animation={[
+              "quicker",
+              {
+                opacity: {
+                  overshootClamping: true,
+                },
+              },
+            ]}
+            enterStyle={{ x: 0, y: -20, opacity: 0, scale: 0.9 }}
+            exitStyle={{ x: 0, y: 10, opacity: 0, scale: 0.95 }}
+            gap="$4"
+            padding={0}
+            margin={0}
+            borderWidth={0}
+            backgroundColor="$colorTransparent"
+          >
+            <Image
+              src={THANK_YOU_URI}
+              height={screenHeight / 1.8}
+              width={screenWidth / 1.2}
+              objectFit="contain"
+            />
+          </Dialog.Content>
+        </Dialog.Portal>
+      </Dialog>
+    </>
   );
 };
 
