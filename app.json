@@ -33,7 +33,8 @@
           "android": {
             "useLegacyPackaging": true,
             "enableProguardInReleaseBuilds": true,
-            "enableShrinkResourcesInReleaseBuilds": true
+            "enableShrinkResourcesInReleaseBuilds": true,
+            "networkInspector": false
           }
         }
       ]
