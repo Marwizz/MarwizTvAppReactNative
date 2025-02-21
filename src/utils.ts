@@ -8,6 +8,7 @@ import {
 } from "./constants";
 
 export const getSQSUri = (deviceId: string) => {
+  // return "https://sqs.eu-north-1.amazonaws.com/761018874223/tv-app";
   return SQS_BASE_URI + `/761018874223/device-${deviceId}`;
 };
 

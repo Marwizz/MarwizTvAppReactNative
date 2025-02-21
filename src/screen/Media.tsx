@@ -179,24 +179,35 @@ const RenderMeidaScreen: FC<{ reset: VoidFunction }> = ({ reset }) => {
           })
         );
 
+        let shouldRefetch = false;
+
         if (_.isArray(Messages)) {
-          reset();
-
-          inc();
-
           await asyncMap(Messages, async (item) => {
-            await SQS_CLIENT.send(
-              new DeleteMessageCommand({
-                QueueUrl: QUE_URI,
-                ReceiptHandle: item.ReceiptHandle,
-              })
-            );
+            try {
+              if (item.Body?.includes("Check ads")) {
+                shouldRefetch = true;
+
+                await SQS_CLIENT.send(
+                  new DeleteMessageCommand({
+                    QueueUrl: QUE_URI,
+                    ReceiptHandle: item.ReceiptHandle,
+                  })
+                );
+              }
+            } catch (err) {
+              console.log("Err : ", err);
+            }
           });
+        }
+
+        if (shouldRefetch) {
+          reset();
+          inc();
         }
       } catch (err) {}
     };
 
-    const interval = setInterval(sqlFn, 10 * 1000);
+    const interval = setInterval(sqlFn, 1 * 1000);
     return () => clearInterval(interval);
   }, []);
 
