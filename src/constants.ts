@@ -1,6 +1,7 @@
 import { SQSClient } from "@aws-sdk/client-sqs";
 import * as Device from "expo-device";
 import { Dimensions } from "react-native";
+import { getRegion } from "./utils";
 
 export const BASE_API_URL = process.env.EXPO_PUBLIC_BASE_API_URL;
 
@@ -25,7 +26,7 @@ export const THANK_YOU_URI =
   "https://images.unsplash.com/photo-1549032305-e816fabf0dd2?q=80&w=3270&auto=format&fit=crop&ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D";
 
 export const SQS_CLIENT = new SQSClient({
-  region: "eu-north-1",
+  region: getRegion(SQS_BASE_URI),
   credentials: {
     accessKeyId: process.env.EXPO_PUBLIC_ACCESS_KEY_ID! as string,
     secretAccessKey: process.env.EXPO_PUBLIC_SECRET_ACCESS_KEY as string,

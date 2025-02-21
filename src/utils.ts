@@ -12,6 +12,15 @@ export const getSQSUri = (deviceId: string) => {
   return SQS_BASE_URI + `/761018874223/device-${deviceId}`;
 };
 
+export const getRegion = (SQS_BASE_URI: string) => {
+  try {
+    const region = new URL(SQS_BASE_URI).hostname.split(".")[1];
+    return region;
+  } catch (err) {
+    return "eu-north-1";
+  }
+};
+
 export const isValidImage = (uri: string): boolean => {
   let isValid = false;
 
