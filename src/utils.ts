@@ -1,6 +1,15 @@
 import * as FileSystem from "expo-file-system";
 import _ from "lodash";
-import { imgFormate, MEDIA_BASE_URL, videoFormate } from "./constants";
+import {
+  imgFormate,
+  MEDIA_BASE_URL,
+  SQS_BASE_URI,
+  videoFormate,
+} from "./constants";
+
+export const getSQSUri = (deviceId: string) => {
+  return SQS_BASE_URI + `/761018874223/device-${deviceId}`;
+};
 
 export const isValidImage = (uri: string): boolean => {
   let isValid = false;

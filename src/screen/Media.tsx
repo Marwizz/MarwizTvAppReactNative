@@ -15,7 +15,7 @@ import { BASE_WEBSOCKET_URI, MEDIA_URL, SQS_CLIENT } from "../constants";
 import { useBackHandler } from "../hooks/useBackHandler";
 import { useAppStore } from "../store";
 import { IGetDeviceInfo } from "../types";
-import { isValidImage, isValidVideo, mediaCaching } from "../utils";
+import { getSQSUri, isValidImage, isValidVideo, mediaCaching } from "../utils";
 
 const RenderMeidaScreen: FC<{ reset: VoidFunction }> = ({ reset }) => {
   useBackHandler();
@@ -168,7 +168,7 @@ const RenderMeidaScreen: FC<{ reset: VoidFunction }> = ({ reset }) => {
   useEffect(() => {
     const sqlFn = async () => {
       try {
-        const QUE_URI = `https://sqs.eu-north-1.amazonaws.com/761018874223/tv-app`;
+        const QUE_URI = getSQSUri(deviceId);
 
         const { Messages } = await SQS_CLIENT.send(
           new ReceiveMessageCommand({

@@ -14,6 +14,8 @@ export const GET_DEVICE_ID = BASE_API_URL + "/api/get-device-id";
 
 export const CHECK_WIZZ_ID_API = BASE_API_URL + "/api/get-isvalid-status";
 
+export const SQS_BASE_URI = "https://sqs.ap-south-1.amazonaws.com";
+
 export const MEDIA_URL =
   BASE_API_URL + "/api/auth/stakeholder/media/today-publish-medias-by-device";
 
