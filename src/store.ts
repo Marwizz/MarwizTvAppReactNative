@@ -8,8 +8,30 @@ interface AppState {
   setAuth: () => void;
   removeAuth: () => void;
 
+  wizUrl: string;
+
+  espIp: string;
   deviceId: string;
-  setDeviceId: (deviceId: string) => void;
+
+  sqsUrl: string;
+  mediaUrl: string;
+
+  awsAccessKey: string;
+  awsSecretKey: string;
+
+  setEsp32: (url: string) => void;
+  setDeviceInfo: (arg: {
+    espIp: string;
+    deviceId: string;
+
+    sqsUrl: string;
+    mediaUrl: string;
+
+    awsAccessKey: string;
+    awsSecretKey: string;
+
+    wizUrl: string;
+  }) => void;
 }
 
 export const useAppStore = create<AppState>()(
@@ -19,8 +41,19 @@ export const useAppStore = create<AppState>()(
       setAuth: () => set(() => ({ isAuth: true })),
       removeAuth: () => set(() => ({ isAuth: false, deviceId: "" })),
 
+      espIp: "ws://echo.websocket.org",
       deviceId: "",
-      setDeviceId: (deviceId) => set(() => ({ deviceId })),
+
+      sqsUrl: "",
+      mediaUrl: "",
+
+      awsAccessKey: "",
+      awsSecretKey: "",
+
+      wizUrl: "",
+
+      setDeviceInfo: (arg) => set(() => ({ ...arg })),
+      setEsp32: (url) => set(() => ({ espIp: url })),
     })),
     {
       name: "bear-storage",

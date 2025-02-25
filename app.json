@@ -21,7 +21,7 @@
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"
       },
-      "package": "com.anonymous.tvappv2"
+      "package": "com.dhruv3880.tvapp"
     },
     "web": {
       "favicon": "./assets/favicon.png"

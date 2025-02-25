@@ -1,6 +1,6 @@
 import { useVideoPlayer, VideoView } from "expo-video";
-import _ from "lodash";
 import React, { FC, memo, useEffect, useRef, useState } from "react";
+import isEqual from "react-fast-compare";
 import { Dialog, Image } from "tamagui";
 import {
   MEDIA_BASE_URL,
@@ -58,7 +58,7 @@ export const RenderImageBlock: FC<{ isPopupModal: boolean }> = memo(
       </Dialog>
     );
   },
-  _.isEqual
+  isEqual
 );
 
 export const RenderImage: FC<{ imgUri: string }> = memo(({ imgUri }) => {
@@ -81,7 +81,7 @@ export const RenderImage: FC<{ imgUri: string }> = memo(({ imgUri }) => {
       width="100%"
     />
   );
-}, _.isEqual);
+}, isEqual);
 
 export const RenderVideo: FC<{ videoUri: string }> = memo(({ videoUri }) => {
   const [cacheUri, setCacheUri] = useState("");
@@ -124,4 +124,4 @@ export const RenderVideo: FC<{ videoUri: string }> = memo(({ videoUri }) => {
       ref={videoRef}
     />
   );
-}, _.isEqual);
+}, isEqual);

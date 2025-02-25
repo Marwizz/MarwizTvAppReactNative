@@ -1,7 +1,5 @@
-import { SQSClient } from "@aws-sdk/client-sqs";
 import * as Device from "expo-device";
 import { Dimensions } from "react-native";
-import { getRegion } from "./utils";
 
 export const BASE_API_URL = process.env.EXPO_PUBLIC_BASE_API_URL;
 
@@ -15,6 +13,8 @@ export const GET_DEVICE_ID = BASE_API_URL + "/api/get-device-id";
 
 export const CHECK_WIZZ_ID_API = BASE_API_URL + "/api/get-isvalid-status";
 
+export const CHECK_DEVICE_STATUS = BASE_API_URL + "/api/check-device-status";
+
 export const SQS_BASE_URI = "https://sqs.ap-south-1.amazonaws.com";
 
 export const MEDIA_URL =
@@ -23,15 +23,7 @@ export const MEDIA_URL =
 export const MEDIA_BASE_URL = "https://marwiz.blob.core.windows.net/videos/";
 
 export const THANK_YOU_URI =
-  "https://images.unsplash.com/photo-1549032305-e816fabf0dd2?q=80&w=3270&auto=format&fit=crop&ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D";
-
-export const SQS_CLIENT = new SQSClient({
-  region: getRegion(SQS_BASE_URI),
-  credentials: {
-    accessKeyId: process.env.EXPO_PUBLIC_ACCESS_KEY_ID! as string,
-    secretAccessKey: process.env.EXPO_PUBLIC_SECRET_ACCESS_KEY as string,
-  },
-});
+  "https://api.marwiz.in/uploads/thankyou/1740130837554-BuffIndiaThankYou.png";
 
 export const { height: screenHeight, width: screenWidth } =
   Dimensions.get("screen");

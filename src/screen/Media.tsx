@@ -1,26 +1,44 @@
 import {
   DeleteMessageCommand,
   ReceiveMessageCommand,
+  SQSClient,
 } from "@aws-sdk/client-sqs";
 import { useBoolean, useCounter, useDebounce } from "ahooks";
 import axios from "axios";
 import _ from "lodash";
 import { asyncMap } from "modern-async";
 import moment from "moment";
-import React, { FC, useEffect, useState } from "react";
+import React, { FC, useEffect, useMemo, useState } from "react";
 import useWebSocket, { ReadyState } from "react-use-websocket";
 import { Spinner, Text, View } from "tamagui";
 import { RenderImage, RenderImageBlock, RenderVideo } from "../component";
-import { BASE_WEBSOCKET_URI, MEDIA_URL, SQS_CLIENT } from "../constants";
+import { CHECK_DEVICE_STATUS, MEDIA_URL } from "../constants";
 import { useBackHandler } from "../hooks/useBackHandler";
 import { useAppStore } from "../store";
-import { IGetDeviceInfo } from "../types";
-import { getSQSUri, isValidImage, isValidVideo, mediaCaching } from "../utils";
+import { IDeviceResposne, IGetDeviceInfo } from "../types";
+import {
+  getRegion,
+  isIp,
+  isValidImage,
+  isValidVideo,
+  mediaCaching,
+} from "../utils";
+import { manageLoop } from "../utils/media";
 
 const RenderMeidaScreen: FC<{ reset: VoidFunction }> = ({ reset }) => {
   useBackHandler();
 
-  const { lastMessage, readyState } = useWebSocket(BASE_WEBSOCKET_URI, {
+  const {
+    deviceId,
+    sqsUrl,
+    awsAccessKey,
+    awsSecretKey,
+    espIp,
+    wizUrl,
+    setEsp32,
+  } = useAppStore();
+
+  const { lastMessage, readyState } = useWebSocket(espIp, {
     shouldReconnect: () => true,
     reconnectInterval: 10 * 1000,
     reconnectAttempts: Number.POSITIVE_INFINITY,
@@ -31,12 +49,103 @@ const RenderMeidaScreen: FC<{ reset: VoidFunction }> = ({ reset }) => {
   const [isShowAD, { set: setIsShowAD }] = useBoolean(true);
   const [isPopupModal, { set: setIsPopupModal }] = useBoolean(false);
 
-  const { deviceId } = useAppStore();
   const [imgUri, setImgUri] = useState("");
   const [videoUri, setVideoUri] = useState("");
   const [rawData, setRawData] = useState<IGetDeviceInfo[]>([]);
 
   const debouncedIsPopupModal = useDebounce(isPopupModal, { wait: 500 });
+
+  const SQS_CLIENT = useMemo(() => {
+    return new SQSClient({
+      region: getRegion(sqsUrl),
+      credentials: {
+        accessKeyId: awsAccessKey! as string,
+        secretAccessKey: awsSecretKey as string,
+      },
+    });
+  }, [sqsUrl, awsAccessKey, awsSecretKey]);
+
+  useEffect(() => {
+    const sqlFn = async () => {
+      try {
+        const QUE_URI = sqsUrl;
+
+        const { Messages } = await SQS_CLIENT.send(
+          new ReceiveMessageCommand({
+            QueueUrl: QUE_URI,
+            MaxNumberOfMessages: 1,
+            WaitTimeSeconds: 10,
+            MessageAttributeNames: ["All"],
+          })
+        );
+
+        let shouldRefetch = false;
+
+        if (_.isArray(Messages)) {
+          await asyncMap(Messages, async (item) => {
+            try {
+              if (item.Body?.includes("Check ads")) {
+                shouldRefetch = true;
+
+                await SQS_CLIENT.send(
+                  new DeleteMessageCommand({
+                    QueueUrl: QUE_URI,
+                    ReceiptHandle: item.ReceiptHandle,
+                  })
+                );
+              }
+            } catch (err) {
+              console.log("Err : ", err);
+            }
+          });
+        }
+
+        if (shouldRefetch) {
+          reset();
+          inc();
+        }
+      } catch (err) {}
+    };
+
+    const interval = setInterval(sqlFn, 10 * 1000);
+    return () => clearInterval(interval);
+  }, [SQS_CLIENT, sqsUrl]);
+
+  useEffect(() => {
+    if (!deviceId) return;
+
+    const timerFn = setInterval(() => {
+      (async () => {
+        if (
+          readyState === ReadyState.OPEN &&
+          espIp !== "ws://echo.websocket.org"
+        )
+          return;
+
+        try {
+          const response = await axios.post<IDeviceResposne>(
+            CHECK_DEVICE_STATUS,
+            {
+              WizzString: wizUrl,
+              deviceID: deviceId,
+            }
+          );
+
+          if (response.data.isOk === true) {
+            if (isIp(response?.data?.ESP32_IP || "")) {
+              setEsp32(`ws://${response.data.ESP32_IP}:81`);
+            }
+          }
+        } catch (err) {
+          console.log("Err : ", err);
+        }
+      })();
+    }, 5 * 1000);
+
+    return () => {
+      clearInterval(timerFn);
+    };
+  }, [deviceId, readyState, wizUrl]);
 
   useEffect(() => {
     if (readyState === ReadyState.OPEN) {
@@ -91,8 +200,8 @@ const RenderMeidaScreen: FC<{ reset: VoidFunction }> = ({ reset }) => {
             setIsShowAD(false);
           }
         }
-      } catch (error) {
-        console.log(error);
+      } catch (err) {
+        console.log("Err:", err);
       }
 
       counter === 0 && setIsLoading(false);
@@ -100,45 +209,9 @@ const RenderMeidaScreen: FC<{ reset: VoidFunction }> = ({ reset }) => {
   }, [deviceId, counter]);
 
   useEffect(() => {
-    (async () => {
-      if (!_.isArray(rawData)) return;
-      if (rawData.length === 0) return;
+    if (!_.isArray(rawData) || rawData.length === 0) return;
 
-      let delayTime = 0;
-      let delayIndex = -1;
-
-      for (let index = 0; index < rawData.length; index++) {
-        const item = rawData[index];
-        if (item.mediaUrl[0] === imgUri || item.mediaUrl[0] === videoUri) {
-          delayTime = _.toNumber(item.duration) * 1000;
-          delayIndex = index;
-        }
-      }
-
-      if (delayIndex === -1) return;
-
-      while (true) {
-        await new Promise((r) => setTimeout(r, delayTime));
-
-        resetMedia();
-
-        let mediaUri;
-
-        if (delayIndex < rawData.length - 1) {
-          mediaUri = rawData[delayIndex + 1]?.mediaUrl[0];
-        } else {
-          mediaUri = rawData[0]?.mediaUrl[0];
-        }
-
-        if (isValidImage(mediaUri)) {
-          setImgUri(mediaUri);
-        } else if (isValidVideo(mediaUri)) {
-          setVideoUri(mediaUri);
-        }
-
-        delayIndex = _.toInteger((delayIndex + 1) % rawData.length);
-      }
-    })();
+    manageLoop({ rawData, setImgUri, setVideoUri, resetMedia });
   }, [rawData]);
 
   useEffect(() => {
@@ -149,8 +222,8 @@ const RenderMeidaScreen: FC<{ reset: VoidFunction }> = ({ reset }) => {
         rawData[0]?.startTime &&
         rawData[0]?.endTime
       ) {
-        const startTime = moment(rawData[0].startTime);
         const endTime = moment(rawData[0].endTime);
+        const startTime = moment(rawData[0].startTime);
 
         if (moment().isBetween(startTime, endTime)) {
           setIsShowAD(true);
@@ -164,52 +237,6 @@ const RenderMeidaScreen: FC<{ reset: VoidFunction }> = ({ reset }) => {
 
     return () => clearInterval(interval);
   }, [rawData]);
-
-  useEffect(() => {
-    const sqlFn = async () => {
-      try {
-        const QUE_URI = getSQSUri(deviceId);
-
-        const { Messages } = await SQS_CLIENT.send(
-          new ReceiveMessageCommand({
-            QueueUrl: QUE_URI,
-            MaxNumberOfMessages: 1,
-            WaitTimeSeconds: 10,
-            MessageAttributeNames: ["All"],
-          })
-        );
-
-        let shouldRefetch = false;
-
-        if (_.isArray(Messages)) {
-          await asyncMap(Messages, async (item) => {
-            try {
-              if (item.Body?.includes("Check ads")) {
-                shouldRefetch = true;
-
-                await SQS_CLIENT.send(
-                  new DeleteMessageCommand({
-                    QueueUrl: QUE_URI,
-                    ReceiptHandle: item.ReceiptHandle,
-                  })
-                );
-              }
-            } catch (err) {
-              console.log("Err : ", err);
-            }
-          });
-        }
-
-        if (shouldRefetch) {
-          reset();
-          inc();
-        }
-      } catch (err) {}
-    };
-
-    const interval = setInterval(sqlFn, 1 * 1000);
-    return () => clearInterval(interval);
-  }, []);
 
   const resetMedia = () => {
     setImgUri("");
@@ -267,9 +294,7 @@ const RenderMeidaScreen: FC<{ reset: VoidFunction }> = ({ reset }) => {
 const Media = () => {
   const [key, setKey] = useState(Math.random().toString());
 
-  const resetKey = () => {
-    setKey(Math.random().toString());
-  };
+  const resetKey = () => setKey(Math.random().toString());
 
   return <RenderMeidaScreen key={key} reset={resetKey} />;
 };

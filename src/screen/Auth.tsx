@@ -7,6 +7,7 @@ import { SafeAreaView } from "react-native";
 import QRCode from "react-native-qrcode-svg";
 import { Button, Image, Text, View } from "tamagui";
 import {
+  CHECK_DEVICE_STATUS,
   CREATE_WIZZ_ID,
   deviceName,
   GET_DEVICE_ID,
@@ -15,10 +16,13 @@ import {
 } from "../constants";
 import { IRootStackParamList } from "../Routes";
 import { useAppStore } from "../store";
+import { IDeviceResposne } from "../types";
+import { isIp } from "../utils";
 
 const Auth = () => {
-  const { deviceId, setDeviceId, setAuth } = useAppStore();
+  const { setDeviceInfo, setAuth } = useAppStore();
 
+  const [tempDeviceId, setTempDeviceId] = useState<null | string>("");
   const [rotation, setRotation] = useState(0);
   const [wizzUrl, setWizzUrl] = useState(null);
   const [wizzString, setWizzString] = useState(null);
@@ -47,11 +51,46 @@ const Auth = () => {
   }, [screenHeight, screenWidth]);
 
   useEffect(() => {
-    if (deviceId) {
-      setAuth();
-      navigate("media");
-    }
-  }, [deviceId]);
+    if (!tempDeviceId) return;
+    if (!wizzString) return;
+
+    const timerFn = setInterval(() => {
+      (async () => {
+        try {
+          const response = await axios.post<IDeviceResposne>(
+            CHECK_DEVICE_STATUS,
+            {
+              WizzString: wizzString,
+              deviceID: tempDeviceId,
+            }
+          );
+
+          if (response.data.isOk === true) {
+            setDeviceInfo({
+              awsAccessKey: response.data.AWS_ACCESS_KEY,
+              awsSecretKey: response.data.AWS_SECRET_KEY,
+              deviceId: tempDeviceId,
+              espIp: isIp(response.data.ESP32_IP)
+                ? `ws://${response.data.ESP32_IP}:81`
+                : "ws://echo.websocket.org",
+              mediaUrl: response.data.base_URL,
+              sqsUrl: response.data.sqs_url,
+              wizUrl: wizzString,
+            });
+
+            setAuth();
+            navigate("media");
+          }
+        } catch (err) {
+          console.log(err);
+        }
+      })();
+    }, 5 * 1000);
+
+    return () => {
+      clearInterval(timerFn);
+    };
+  }, [tempDeviceId, wizzString]);
 
   useEffect(() => {
     getDeviceName();
@@ -98,7 +137,7 @@ const Auth = () => {
     const res = await axios.get(`${GET_DEVICE_ID}/${wizzString}`);
 
     if (res.data && res.data.deviceId) {
-      setDeviceId(res.data.deviceId);
+      setTempDeviceId(res.data.deviceId);
       setIsWizzStringValid(true);
     }
   };
